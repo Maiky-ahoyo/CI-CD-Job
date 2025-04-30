@@ -58,32 +58,37 @@ pipeline {
       }
       steps {
         script {
-          sh 'sudo apt update && sudo apt install -y curl && curl -fsSL https://github.com/cli/cli/releases/download/v2.49.0/gh_2.49.0_linux_amd64.deb -o gh.deb && sudo dpkg -i gh.deb'
-          sh 'echo "$GITHUB_TOKEN" | gh auth login --with-token'
-
+          // Obtener repositorio y rama
           def repo = sh(script: 'git config --get remote.origin.url | sed -E "s/.*github.com[/:](.*)\\.git/\\1/"', returnStdout: true).trim()
           def branch = env.BRANCH_NAME
 
-          def prCheck = sh(
-            script: "gh pr list --repo ${repo} --head ${branch} --json number --jq '.[0].number'",
-            returnStdout: true
-          ).trim()
+          // Verificar si el PR ya existe
+          def prCheck = sh(script: """
+            curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            "https://api.github.com/repos/${repo}/pulls?head=${branch}" | jq -r '.[0].number'
+          """, returnStdout: true).trim()
 
           if (prCheck == '') {
             echo "No se encontró PR desde ${branch}, creando uno..."
-            sh "gh pr create --repo ${repo} --head ${branch} --base main --title 'Merge ${branch} into main' --body 'Creado automáticamente por Jenkins'"
-            prCheck = sh(
-              script: "gh pr list --repo ${repo} --head ${branch} --json number --jq '.[0].number'",
-              returnStdout: true
-            ).trim()
+
+            // Crear un nuevo PR usando la API de GitHub
+            prCheck = sh(script: """
+              curl -s -H "Authorization: token $GITHUB_TOKEN" \
+              -X POST \
+              -d '{"title": "Merge ${branch} into main", "head": "${branch}", "base": "main"}' \
+              "https://api.github.com/repos/${repo}/pulls" | jq -r '.number'
+            """, returnStdout: true).trim()
           } else {
             echo "PR existente encontrado: #${prCheck}"
           }
 
-          def mergeStatus = sh(
-            script: "gh pr merge ${prCheck} --merge --delete-branch --repo ${repo}",
-            returnStatus: true
-          )
+          // Hacer el merge del PR
+          def mergeStatus = sh(script: """
+            curl -s -H "Authorization: token $GITHUB_TOKEN" \
+            -X PUT \
+            -d '{"merge_method": "merge"}' \
+            "https://api.github.com/repos/${repo}/pulls/${prCheck}/merge"
+          """, returnStatus: true)
 
           if (mergeStatus != 0) {
             currentBuild.result = 'UNSTABLE'
