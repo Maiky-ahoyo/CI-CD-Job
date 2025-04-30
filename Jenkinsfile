@@ -95,6 +95,11 @@ pipeline {
 
   post {
     success {
+
+      mail to: 'gaelborchardt@gmail.com',
+        subject: " Build exitoso: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        body: "La construcción success ${env.BRANCH_NAME}.\nRevisa: ${env.BUILD_URL}"
+
       slackSend channel: '#api1',
         message: "✅ - Build exitoso en rama ${env.BRANCH_NAME}: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
     }
@@ -104,7 +109,7 @@ pipeline {
         subject: "❌ Build Fallido: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
         body: "La construcción falló en rama ${env.BRANCH_NAME}.\nRevisa: ${env.BUILD_URL}"
 
-      slackSend channel: '#deploys',
+      slackSend channel: '#api1',
         message: "❌ Build fallido en rama ${env.BRANCH_NAME}: ${env.JOB_NAME} #${env.BUILD_NUMBER}\n${env.BUILD_URL}"
     }
   }
