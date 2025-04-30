@@ -52,27 +52,45 @@ pipeline {
       }
     }
 
-    stage('Validate PR (Preview Build)') {
+    stage('Create or Merge PR') {
       when {
-        changeRequest()
+        not { branch 'main' }
       }
       steps {
-        echo "🔍 Validando Pull Request: ${env.CHANGE_BRANCH} desde ${env.CHANGE_TARGET}"
-      }
-    }
+        script {
+          sh 'which gh || (curl -fsSL https://cli.github.com/install.sh | sh || true)'
+          sh 'echo "$GITHUB_TOKEN" | gh auth login --with-token'
 
-    stage('Deploy Preview to Vercel') {
-      when {
-        allOf {
-          not { branch 'main' }
-          not { changeRequest() }
-          expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
-        }
-      }
-      steps {
-        dir("ci-cd") {
-          sh 'npm install -g vercel'
-          sh 'vercel --token $VERCEL_TOKEN --confirm'
+          def repo = sh(script: 'git config --get remote.origin.url | sed -E "s/.*github.com[/:](.*)\\.git/\\1/"', returnStdout: true).trim()
+          def branch = env.BRANCH_NAME
+
+          def prCheck = sh(
+            script: "gh pr list --repo ${repo} --head ${branch} --json number --jq '.[0].number'",
+            returnStdout: true
+          ).trim()
+
+          if (prCheck == '') {
+            echo "No se encontró PR desde ${branch}, creando uno..."
+            sh "gh pr create --repo ${repo} --head ${branch} --base main --title 'Merge ${branch} into main' --body 'Creado automáticamente por Jenkins'"
+            prCheck = sh(
+              script: "gh pr list --repo ${repo} --head ${branch} --json number --jq '.[0].number'",
+              returnStdout: true
+            ).trim()
+          } else {
+            echo "PR existente encontrado: #${prCheck}"
+          }
+
+          def mergeStatus = sh(
+            script: "gh pr merge ${prCheck} --merge --delete-branch --repo ${repo}",
+            returnStatus: true
+          )
+
+          if (mergeStatus != 0) {
+            currentBuild.result = 'UNSTABLE'
+            error("⚠️ No se pudo hacer merge automático del PR #${prCheck}. Revisa conflictos.")
+          } else {
+            echo "✅ Pull Request #${prCheck} mergeado correctamente."
+          }
         }
       }
     }
@@ -81,7 +99,6 @@ pipeline {
       when {
         allOf {
           branch 'main'
-          not { changeRequest() }
           expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
         }
       }
@@ -93,26 +110,35 @@ pipeline {
       }
     }
 
-    stage('Merge Pull Request') {
+    stage('Tag and Release (main only)') {
       when {
-        changeRequest()
+        allOf {
+          branch 'main'
+          expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
+        }
       }
       steps {
         script {
           sh 'which gh || (curl -fsSL https://cli.github.com/install.sh | sh || true)'
           sh 'echo "$GITHUB_TOKEN" | gh auth login --with-token'
 
-          def mergeStatus = sh(
-            script: "gh pr merge $CHANGE_ID --merge --delete-branch --repo $CHANGE_URL",
-            returnStatus: true
-          )
+          def repo = sh(script: 'git config --get remote.origin.url | sed -E "s/.*github.com[/:](.*)\\.git/\\1/"', returnStdout: true).trim()
+          def lastTag = sh(script: "git fetch --tags && git tag --sort=-v:refname | grep '^v' | head -n 1", returnStdout: true).trim()
+          def newTag = ""
 
-          if (mergeStatus != 0) {
-            currentBuild.result = 'UNSTABLE'
-            error("⚠️ No se pudo hacer merge automático del PR #${CHANGE_ID}. Revisa conflictos.")
+          if (lastTag == "") {
+            newTag = "v1.0.0"
           } else {
-            echo "✅ Pull Request #${CHANGE_ID} mergeado correctamente."
+            def (major, minor, patch) = lastTag.replace("v", "").tokenize(".").collect { it.toInteger() }
+            newTag = "v${major}.${minor}.${patch + 1}"
           }
+
+          sh "git config user.name 'Jenkins'"
+          sh "git config user.email 'jenkins@localhost'"
+          sh "git tag -a ${newTag} -m 'Release ${newTag}'"
+          sh "git push origin ${newTag}"
+
+          sh "gh release create ${newTag} --repo ${repo} --title 'Release ${newTag}' --notes 'Release creado automáticamente por Jenkins para el build #${env.BUILD_NUMBER}'"
         }
       }
     }
@@ -121,29 +147,29 @@ pipeline {
   post {
     success {
       mail to: 'gaelborchardt@gmail.com, migelatinapkin@gmail.com, frannperez874@gmail.com',
-        subject: "✅ Build exitoso: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-        body: "La construcción fue exitosa en la rama ${env.BRANCH_NAME}.\nRevisa: ${env.BUILD_URL}"
+           subject: "✅ Build exitoso: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+           body: "La construcción fue exitosa en la rama ${env.BRANCH_NAME}.\nRevisa: ${env.BUILD_URL}"
 
       slackSend channel: '#api1',
-        message: "✅ Build exitoso en rama ${env.BRANCH_NAME}: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+                message: "✅ Build exitoso en rama ${env.BRANCH_NAME}: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
     }
 
     unstable {
       mail to: 'gaelborchardt@gmail.com, migelatinapkin@gmail.com, frannperez874@gmail.com',
-        subject: "⚠️ Error al mergear PR: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-        body: "No se pudo hacer merge automático del Pull Request en la rama ${env.BRANCH_NAME}. Revisa conflictos.\n\nDetalles: ${env.BUILD_URL}"
+           subject: "⚠️ Error al mergear PR: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+           body: "No se pudo hacer merge automático del Pull Request para la rama ${env.BRANCH_NAME}. Revisa conflictos.\n\nDetalles: ${env.BUILD_URL}"
 
       slackSend channel: '#api1',
-        message: "⚠️ Falló merge automático del PR #${env.CHANGE_ID} en rama ${env.BRANCH_NAME}.\n${env.BUILD_URL}"
+                message: "⚠️ Falló merge automático del PR para rama ${env.BRANCH_NAME}.\n${env.BUILD_URL}"
     }
 
     failure {
       mail to: 'gaelborchardt@gmail.com, migelatinapkin@gmail.com, frannperez874@gmail.com',
-        subject: "❌ Build Fallido: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-        body: "La construcción falló en la rama ${env.BRANCH_NAME}.\nRevisa: ${env.BUILD_URL}"
+           subject: "❌ Build Fallido: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+           body: "La construcción falló en la rama ${env.BRANCH_NAME}.\nRevisa: ${env.BUILD_URL}"
 
       slackSend channel: '#api1',
-        message: "❌ Build fallido en rama ${env.BRANCH_NAME}: ${env.JOB_NAME} #${env.BUILD_NUMBER}\n${env.BUILD_URL}"
+                message: "❌ Build fallido en rama ${env.BRANCH_NAME}: ${env.JOB_NAME} #${env.BUILD_NUMBER}\n${env.BUILD_URL}"
     }
   }
 }
