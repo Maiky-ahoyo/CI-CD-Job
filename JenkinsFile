@@ -1,0 +1,52 @@
+pipeline {
+  agent any
+
+  stages {
+    stage('Checkout') {
+      steps {
+        git branch: 'main', url: 'https://github.com/Maiky-ahoyo/CI-CD-Job.git'
+      }
+    }
+
+    stage('Install Dependencies') {
+      steps {
+        sh 'npm install'
+      }
+    }
+
+    stage('Run Tests') {
+      steps {
+        sh 'npm test'
+      }
+    }
+
+    stage('Build') {
+      when {
+        expression { currentBuild.result == null } // solo si pasó tests
+      }
+      steps {
+        sh 'npm run build'
+      }
+    }
+
+    stage('Deploy') {
+      when {
+        branch 'main'
+      }
+      steps {
+        sh './deploy.sh' // o comandos de despliegue reales
+      }
+    }
+  }
+
+  post {
+    failure {
+      mail to: 'gaelborchardt@gmail.com',
+           subject: "Build Fallido: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+           body: "La construcción falló. Ver detalles en: ${env.BUILD_URL}"
+    }
+    success {
+      slackSend channel: '#deploys', message: "✅ Build exitoso para ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+    }
+  }
+}
