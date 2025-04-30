@@ -95,8 +95,8 @@ pipeline {
 
   post {
     success {
-      slackSend channel: '#deploys',
-        message: "✅ Build exitoso en rama ${env.BRANCH_NAME}: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+      slackSend channel: '#api1',
+        message: "✅ - Build exitoso en rama ${env.BRANCH_NAME}: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
     }
 
     failure {
