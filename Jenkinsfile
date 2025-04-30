@@ -1,8 +1,12 @@
 pipeline {
   agent any
 
+  tools {
+    nodejs "Node18" // El nombre exacto como lo configuraste en Jenkins
+  }
+
   environment {
-    VERCEL_TOKEN = credentials('vercel-token') // Configura esta credencial en Jenkins (tipo: Secret Text)
+    VERCEL_TOKEN = credentials('vercel-token') // Token de Vercel configurado como Secret Text
   }
 
   stages {
