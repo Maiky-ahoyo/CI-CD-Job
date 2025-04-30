@@ -58,7 +58,7 @@ pipeline {
       }
       steps {
         script {
-          sh 'which gh || (curl -fsSL https://cli.github.com/install.sh | sh || true)'
+          sh 'sudo apt update && sudo apt install -y curl && curl -fsSL https://github.com/cli/cli/releases/download/v2.49.0/gh_2.49.0_linux_amd64.deb -o gh.deb && sudo dpkg -i gh.deb'
           sh 'echo "$GITHUB_TOKEN" | gh auth login --with-token'
 
           def repo = sh(script: 'git config --get remote.origin.url | sed -E "s/.*github.com[/:](.*)\\.git/\\1/"', returnStdout: true).trim()
@@ -119,7 +119,7 @@ pipeline {
       }
       steps {
         script {
-          sh 'which gh || (curl -fsSL https://cli.github.com/install.sh | sh || true)'
+          sh 'sudo apt update && sudo apt install -y curl && curl -fsSL https://github.com/cli/cli/releases/download/v2.49.0/gh_2.49.0_linux_amd64.deb -o gh.deb && sudo dpkg -i gh.deb'
           sh 'echo "$GITHUB_TOKEN" | gh auth login --with-token'
 
           def repo = sh(script: 'git config --get remote.origin.url | sed -E "s/.*github.com[/:](.*)\\.git/\\1/"', returnStdout: true).trim()
