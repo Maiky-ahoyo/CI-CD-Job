@@ -13,7 +13,7 @@ pipeline {
     stage('Checkout') {
       steps {
         checkout scm
-        sh 'ls -la "ci cd"' // Para verificar que package.json está ahí
+        sh 'ls -la "ci-cd"' // Para verificar que package.json está ahí
       }
     }
 
