@@ -1,6 +1,10 @@
 pipeline {
   agent any
 
+  environment {
+    VERCEL_TOKEN = credentials('vercel-token') // Reemplaza con el ID real del token en Jenkins
+  }
+
   stages {
     stage('Checkout') {
       steps {
@@ -16,13 +20,20 @@ pipeline {
 
     stage('Run Tests') {
       steps {
-        sh 'npm test'
+        script {
+          try {
+            sh 'npm test'
+          } catch (e) {
+            currentBuild.result = 'FAILURE'
+            error("❌ Tests fallaron. Detalles: ${e}")
+          }
+        }
       }
     }
 
     stage('Build') {
       when {
-        expression { currentBuild.result == null } // solo si pasó tests
+        expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
       }
       steps {
         sh 'npm run build'
@@ -31,22 +42,31 @@ pipeline {
 
     stage('Deploy') {
       when {
-        branch 'main'
+        allOf {
+          branch 'main'
+          expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
+        }
       }
       steps {
-        sh './deploy.sh' // o comandos de despliegue reales
+        sh 'npm install -g vercel'
+        sh 'vercel --prod --token $VERCEL_TOKEN --confirm'
       }
     }
   }
 
   post {
+    success {
+      slackSend channel: '#deploys',
+                message: "✅ Build exitoso: ${env.JOB_NAME} #${env.BUILD_NUMBER} en rama ${env.GIT_BRANCH}"
+    }
+
     failure {
       mail to: 'gaelborchardt@gmail.com',
-           subject: "Build Fallido: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-           body: "La construcción falló. Ver detalles en: ${env.BUILD_URL}"
-    }
-    success {
-      slackSend channel: '#deploys', message: "✅ Build exitoso para ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+           subject: "❌ Build Fallido: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+           body: "La construcción falló en la rama ${env.GIT_BRANCH}. Revisa: ${env.BUILD_URL}"
+
+      slackSend channel: '#deploys',
+                message: "❌ Build fallido: ${env.JOB_NAME} #${env.BUILD_NUMBER} en rama ${env.GIT_BRANCH}\n${env.BUILD_URL}"
     }
   }
 }
