@@ -2,34 +2,39 @@ pipeline {
   agent any
 
   tools {
-    nodejs "nodeJS" 
+    nodejs "Node18"
   }
 
   environment {
-    VERCEL_TOKEN = credentials('vercel-token') // Token de Vercel configurado como Secret Text
+    VERCEL_TOKEN = credentials('vercel-token')
   }
 
   stages {
     stage('Checkout') {
       steps {
         checkout scm
+        sh 'ls -la "CI-CD-Job/ci cd"' // Para verificar que package.json está ahí
       }
     }
 
     stage('Install Dependencies') {
       steps {
-        sh 'npm install'
+        dir('CI-CD-Job/ci cd') {
+          sh 'npm install'
+        }
       }
     }
 
     stage('Run Tests') {
       steps {
-        script {
-          try {
-            sh 'npm test'
-          } catch (e) {
-            currentBuild.result = 'FAILURE'
-            error("❌ Tests fallaron. Detalles: ${e}")
+        dir('CI-CD-Job/ci cd') {
+          script {
+            try {
+              sh 'npm test'
+            } catch (e) {
+              currentBuild.result = 'FAILURE'
+              error("❌ Tests fallaron. Detalles: ${e}")
+            }
           }
         }
       }
@@ -40,7 +45,9 @@ pipeline {
         expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
       }
       steps {
-        sh 'npm run build'
+        dir('CI-CD-Job/ci cd') {
+          sh 'npm run build'
+        }
       }
     }
 
@@ -62,9 +69,10 @@ pipeline {
         }
       }
       steps {
-        echo "🚀 Desplegando preview en Vercel para rama ${env.BRANCH_NAME}"
-        sh 'npm install -g vercel'
-        sh 'vercel --token $VERCEL_TOKEN --confirm'
+        dir('CI-CD-Job/ci cd') {
+          sh 'npm install -g vercel'
+          sh 'vercel --token $VERCEL_TOKEN --confirm'
+        }
       }
     }
 
@@ -77,8 +85,10 @@ pipeline {
         }
       }
       steps {
-        sh 'npm install -g vercel'
-        sh 'vercel --prod --token $VERCEL_TOKEN --confirm'
+        dir('CI-CD-Job/ci cd') {
+          sh 'npm install -g vercel'
+          sh 'vercel --prod --token $VERCEL_TOKEN --confirm'
+        }
       }
     }
   }
@@ -86,16 +96,16 @@ pipeline {
   post {
     success {
       slackSend channel: '#deploys',
-                message: "✅ Build exitoso en rama ${env.BRANCH_NAME}: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
+        message: "✅ Build exitoso en rama ${env.BRANCH_NAME}: ${env.JOB_NAME} #${env.BUILD_NUMBER}"
     }
 
     failure {
       mail to: 'gaelborchardt@gmail.com',
-           subject: "❌ Build Fallido: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
-           body: "La construcción falló en rama ${env.BRANCH_NAME}.\nRevisa: ${env.BUILD_URL}"
+        subject: "❌ Build Fallido: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+        body: "La construcción falló en rama ${env.BRANCH_NAME}.\nRevisa: ${env.BUILD_URL}"
 
       slackSend channel: '#deploys',
-                message: "❌ Build fallido en rama ${env.BRANCH_NAME}: ${env.JOB_NAME} #${env.BUILD_NUMBER}\n${env.BUILD_URL}"
+        message: "❌ Build fallido en rama ${env.BRANCH_NAME}: ${env.JOB_NAME} #${env.BUILD_NUMBER}\n${env.BUILD_URL}"
     }
   }
 }
