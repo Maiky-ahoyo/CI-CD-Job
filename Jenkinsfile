@@ -19,7 +19,7 @@ pipeline {
 
     stage('Install Dependencies') {
       steps {
-        dir("CI-CD-Job/ci-cd") {
+        dir("ci-cd") {
           sh 'npm install'
         }
       }
@@ -27,7 +27,7 @@ pipeline {
 
     stage('Run Tests') {
       steps {
-        dir("CI-CD-Job/ci-cd") {
+        dir("ci-cd") {
           script {
             try {
               sh 'npm test'
@@ -45,7 +45,7 @@ pipeline {
         expression { currentBuild.result == null || currentBuild.result == 'SUCCESS' }
       }
       steps {
-        dir("CI-CD-Job/ci-cd") {
+        dir("ci-cd") {
           sh 'npm run build'
         }
       }
@@ -69,7 +69,7 @@ pipeline {
         }
       }
       steps {
-        dir("CI-CD-Job/ci-cd") {
+        dir("ci-cd") {
           sh 'npm install -g vercel'
           sh 'vercel --token $VERCEL_TOKEN --confirm'
         }
@@ -85,7 +85,7 @@ pipeline {
         }
       }
       steps {
-        dir("CI-CD-Job/ci-cd") {
+        dir("ci-cd") {
           sh 'npm install -g vercel'
           sh 'vercel --prod --token $VERCEL_TOKEN --confirm'
         }
