@@ -96,7 +96,7 @@ pipeline {
   post {
     success {
 
-      mail to: 'gaelborchardt@gmail.com',
+      mail to: 'gaelborchardt@gmail.com, migelatinapkin@gmail.com, frannperez874@gmail.com',
         subject: " Build exitoso: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
         body: "La construcción success ${env.BRANCH_NAME}.\nRevisa: ${env.BUILD_URL}"
 
@@ -105,7 +105,7 @@ pipeline {
     }
 
     failure {
-      mail to: 'gaelborchardt@gmail.com',
+      mail to: 'gaelborchardt@gmail.com, migelatinapkin@gmail.com, frannperez874@gmail.com',
         subject: "❌ Build Fallido: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
         body: "La construcción falló en rama ${env.BRANCH_NAME}.\nRevisa: ${env.BUILD_URL}"
 
