@@ -24,8 +24,8 @@ describe("App", () => {
     expect(screen.getByText("count is 1")).toBeInTheDocument();
   });
 
-  //it("renders custom message", () => {
-  //  render(<App />);
-  //  expect(screen.getByText(/dshyjGADSKUGVSA/i)).toBeInTheDocument();
-  //});
+  it("renders custom message", () => {
+    render(<App />);
+    expect(screen.getByText(/dshyjGADSKUGVSA/i)).toBeInTheDocument();
+  });
 });
